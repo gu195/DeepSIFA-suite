@@ -1,0 +1,8 @@
+{
+  "language": 0,
+  "curvePath": "sample.py",
+  "dataPath": "生成测试集数据和csv.py",
+  "mainPath": "DeepSIFA/eval_test_cpu.py",
+  "layered": "DeepSIFA/layering.py",
+  "interpreter": "D:\\Anaconda\\envs\\tuxiang\\python.exe"
+}

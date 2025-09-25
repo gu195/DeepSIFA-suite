@@ -1,0 +1,20 @@
+﻿__pycache__/
+*.pyc
+.venv/
+env/
+.vscode/
+.idea/
+build/
+dist/
+# 大文件与数据
+data/
+*.tif
+*.tiff
+*.zip
+*.rar
+*.7z
+*.pt
+*.h5
+*.weights
+*.ckpt
+*.log
