@@ -1,0 +1,29 @@
+{
+  "checkpoint": "D:\\Code\\MonoXtract\\DeepSIFA_main_code\\DeepSIFA\\checkpoints\\best_acc.pth",
+  "dataset_csv": "D:\\Code\\MonoXtract\\DeepSIFA自动化\\data\\mlkl\\test\\v1\\337.csv",
+  "data_dir": "D:\\Code\\MonoXtract\\DeepSIFA自动化\\data\\mlkl\\test\\v1\\归一化插值后npz_1024_高斯平滑1",
+  "device": "cpu",
+  "trained_total_blocks": 10,
+  "trained_sac_blocks": 3,
+  "trained_transformer_blocks": 7,
+  "classification_metrics": {
+    "n": 337,
+    "accuracy": 0.884272997032641,
+    "tp": 175,
+    "tn": 123,
+    "fp": 24,
+    "fn": 15
+  },
+  "selected_examples": [
+    "MLKL_6_92_good.npz",
+    "MLKL_5_126_good.npz",
+    "MLKL_5_56_good.npz",
+    "MLKL_6_39_bad.npz",
+    "MLKL_5_46_bad.npz",
+    "MLKL_5_22_bad.npz"
+  ],
+  "integrated_gradients_steps": 48,
+  "occlusion_width": 64,
+  "transition_annotations_supplied": false,
+  "interpretation_note": "The current forward pass does not insert cls_token or pos_embed. Classification uses token 0; attention rollout therefore starts from the first ordinary token. Maps explain valid/invalid classification and are not direct state-transition predictions."
+}

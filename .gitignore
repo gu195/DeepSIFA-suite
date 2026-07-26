@@ -1,35 +1,18 @@
-__pycache__/
-*.py[cod]
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Local development environments
 .venv/
 venv/
 env/
 .idea/
 .vscode/
 
-# Generated training and evaluation artifacts
-outputs/
-logs/
-runs/
-*.log
+# Maintainer-only translation cache
+.comment_translation_cache.json
+.comment_translation_cache.json.tmp
 
-# Large raw microscopy inputs are not stored in Git
-*.tif
-*.tiff
-*.nd2
-*.czi
-*.lif
+# Superseded local public-package artifacts
+/DeepSIFA-automation/
+/monoxtract/__pycache__/
+/scripts/__pycache__/
 
-# Local model artifacts other than the released checkpoint
-checkpoints/*.pth
-!checkpoints/best_acc.pth
-checkpoints/fold*/
-
-# Temporary archives and executables
-*.zip
-*.rar
-*.7z
-*.exe
+# Future local outputs created outside the deposited source snapshot
+/outputs/

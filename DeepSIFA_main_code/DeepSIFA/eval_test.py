@@ -1,0 +1,268 @@
+import os, argparse
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+import logging
+import numpy as np
+from tqdm import tqdm
+import sys
+import gc
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+import torch.nn as nn
+import torch.utils.data
+from scipy import stats
+from utils.xrayloader import XrayDataset_val
+from utils.metrics_2cls import *
+from collections import OrderedDict
+import pandas as pd
+from PIL import Image
+import shutil
+import time
+import csv
+import glob
+
+SAVE_LOG = 'logs_test'
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
+
+# SAVE_LOG = 'logs_I0_5'
+
+def get_cfg():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--n_epochs', type=int, default=1)  
+    parser.add_argument('--bt_size', type=int, default=1)
+    parser.add_argument(
+        '--weight_path',
+        type=str,
+        default=os.path.join(SCRIPT_DIR, 'checkpoints', 'best_acc.pth'),
+    )
+    parser.add_argument(
+        '--data_dir',
+        type=str,
+        default=os.path.join(PROJECT_ROOT, 'data', 'MLKL', 'test', 'v12'),
+    )
+    parser.add_argument('--results_dir', default=os.path.join(SCRIPT_DIR, SAVE_LOG), type=str, metavar='FILENAME',
+                        help='Output csv file for validation results (summary)')
+    parse_config = parser.parse_args()
+    return parse_config
+
+
+def compute_metrics(outputs, targets, loss_fn):
+    outputs = torch.cat(outputs, dim=0).detach()
+    targets = torch.cat(targets, dim=0).detach()
+    targets_ = torch.argmax(targets, dim=1)
+    loss = loss_fn(outputs, targets_).cpu().item()
+    outputs = outputs.cpu().numpy()
+    targets = targets.cpu().numpy()
+    acc = ACC(outputs, targets)
+    f1 = F1_score(outputs, targets)
+    recall_F = Recall(outputs, targets)
+    precision = Precision(outputs, targets)
+    kappa = Cohen_Kappa(outputs, targets)
+    cm = confusion_matrix(outputs, targets)
+    specificity = spe(outputs, targets)
+    metrics = OrderedDict([
+        ('loss', loss),
+        ('acc', acc),
+        ('f1', f1),
+        ('recall', recall_F),
+        ('precision', precision),
+        ('kappa', kappa),
+        ('confusion_matrix',cm),
+        ('specificity',specificity)
+    ])
+    return metrics
+
+
+
+# -------------------------- test func --------------------------#
+def test(parse_config, epoch, model, loader_eval, loss_fn):
+    print("-------------testing-----------")
+    model.eval()
+    predictions = []
+    allscore = []
+    labels = []
+
+    with torch.no_grad():
+        for img, label, label_onehot, name in tqdm(loader_eval):
+            img = img.cuda().float()
+            label = label.cuda()
+            label_onehot = label_onehot.cuda()
+            output = model(img)
+            if isinstance(output, (tuple, list)):
+                output = output[0]
+            output_softmax = F.softmax(output, dim=1)
+
+            max_probs, max_indices = torch.max(output_softmax, dim=1)
+            if max_indices == 1:
+                realprobs = max_probs
+            else:
+                realprobs = 1 - max_probs
+            # Save results with dictionary
+            result_dict = {
+                'name': name[0],
+                'label': label.item(),  
+                'score':round(realprobs.item(), 2),
+                'pre': max_indices.item()
+            }
+            allscore.append(result_dict) 
+            predictions.append(output)
+            labels.append(label_onehot)
+
+
+
+    return allscore
+
+
+def get_ci(global_list):
+    average_value = round(np.mean(global_list), 3)
+    standard_error  = stats.sem(global_list)
+    a = round(average_value - 1.96 * standard_error, 3)
+    b = round(average_value + 1.96 * standard_error, 3)
+    return [average_value, (a, b)]
+
+
+if __name__ == '__main__':
+    global_nameFN = []
+    global_nameFP = []
+    global_nameTP = []
+    global_nameLOW = []
+    global_nameHIGH = []
+    global_nameTN = []
+    global_accuracy = []
+    global_sensitivity = [] 
+    global_F1_Score = []
+    # -------------------------- get args --------------------------#
+    gc.collect()
+    torch.cuda.empty_cache()
+    parse_config = get_cfg()
+    print('data_dir路径', parse_config.data_dir)
+    parse_config.data_dir1 = os.path.join(parse_config.data_dir, 'processing_data')
+    parse_config.val_csv_dir = glob.glob(os.path.join(parse_config.data_dir, '*.csv'))[0]
+
+
+    # -------------------------- build dataloaders --------------------------#
+    dataset = XrayDataset_val(parse_config)
+    loader_eval = torch.utils.data.DataLoader(dataset, batch_size=parse_config.bt_size, shuffle=True)
+
+    # -------------------------- build models --------------------------#
+    from models.vit import vit_base_patch16_224
+    model = vit_base_patch16_224(num_classes=2).cuda()
+    # print(model)
+    pretrained = True
+    if pretrained:#How to modify this paragraph
+        model_dict = model.state_dict()
+        model_weights = torch.load(parse_config.weight_path, weights_only=True)
+        pretrained_dict = model_weights
+        pretrained_dict = {k: v for k, v in pretrained_dict.items() if k in model_dict}#Remove the overlapping parts of the pre-trained model and the dict of the new model
+        model_dict.update(pretrained_dict)#Update some parameters in new_model with pre-trained model parameters
+        model.load_state_dict(model_dict) #Load the updated model_dict into the new model
+
+    cls_loss2 = nn.CrossEntropyLoss()
+    # -------------------------- start training --------------------------#
+    max_iou = 0
+    best_ep = 0
+    min_loss = 10
+    min_epoch = 0
+    # -------------------------- build loggers and savers --------------------------#
+    directory = parse_config.results_dir
+    if os.path.exists(directory):
+        shutil.rmtree(directory)  # Delete the entire directory
+    os.makedirs(parse_config.results_dir, exist_ok=True)  # Re-create directory
+
+
+
+    log_path = parse_config.results_dir
+    EPOCHS = parse_config.n_epochs
+
+    
+    csv_file_score = os.path.join(log_path, 'score.csv')
+    csv_file_score_HIGH = os.path.join(log_path, 'scoreHIGH.csv')
+    csv_file_score_LOW = os.path.join(log_path, 'scoreLOW.csv')
+    csv_file_score_MIDDLE = os.path.join(log_path, 'scoreMIDDLE.csv')
+    directory = os.path.dirname(csv_file_score)
+    os.makedirs(directory, exist_ok=True)
+
+
+
+    # start training
+    for epoch in range(1, EPOCHS + 1):
+        #print('learning rate:', optimizer.state_dict()['param_groups'][0]['lr'])
+        start = time.time()
+        allscore= test(parse_config, epoch, model, loader_eval, cls_loss2)
+        time_elapsed = time.time() - start
+
+    with open(csv_file_score, 'w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['name', 'label', 'score', 'pre'])
+        for item in allscore:
+            writer.writerow([item['name'], item['label'], item['score'], item['pre']])   
+
+
+
+    # # ---------------------------------------------- Draw probability graph All ----------------------------------------------
+    input_file = os.path.join('DeepSIFA', SAVE_LOG, 'score.csv')
+
+    # Read CSV file
+    df = pd.read_csv(input_file)
+    scores = df['score']
+    bin_sizes = [0.025, 0.0125, 0.00625]
+    image_files = []  # stores the generated image path
+
+    for bin_size in bin_sizes:
+        bins = np.arange(0, 1 + bin_size, bin_size)
+        output_file = os.path.join('DeepSIFA', SAVE_LOG, f'score_distribution_{bin_size:.4f}.png')
+        image_files.append(output_file)  # Record picture path
+        
+        plt.figure(figsize=(10, 6))
+        counts, bins, patches = plt.hist(scores, bins=bins, edgecolor='black', alpha=0.7)
+
+        # Get the total number of items
+        total = len(scores)
+
+        # Add title and label, including total number of items and current interval
+        plt.title(f'Score Distribution (Total: {total}, Bin Size: {bin_size:.4f})')
+        plt.xlabel('Score', labelpad=0)
+        plt.ylabel('Num')
+        plt.grid(axis='y', alpha=0.75)
+        plt.xticks(np.arange(0, 1.1, 0.1))
+
+        # Dynamically adjust font size
+        fontsize = 2 if bin_size == 0.00625 else (3 if bin_size == 0.0125 else 4)
+        for count, bin_edge in zip(counts, bins[:-1]):
+            if count > 0:
+                percentage = f'{(count / total * 100):.1f}%'
+                plt.text(bin_edge + bin_size / 2, count, percentage, ha='center', va='bottom', fontsize=fontsize, color='black')
+
+        plt.subplots_adjust(left=0.05, right=0.95, top=0.95, bottom=0.07)
+        plt.savefig(output_file, dpi=300)
+        plt.close()
+        # print(f"The histogram has been saved to {output_file}")
+
+    # Merge generated images
+    images = [Image.open(image_file) for image_file in image_files]
+    total_height = sum(image.height for image in images)
+    max_width = max(image.width for image in images)
+
+    # Create a new image to store the stitched result
+    merged_image = Image.new('RGB', (max_width, total_height))
+
+    # Paste each image in a new image
+    y_offset = 0
+    for image in images:
+        merged_image.paste(image, (0, y_offset))
+        y_offset += image.height
+
+    # Save the spliced image
+    merged_output_file = os.path.join('DeepSIFA', SAVE_LOG, 'score_distribution.png')
+    merged_image.save(merged_output_file)
+
+    print(f"score_distribution拼接后的图片已保存到 {merged_output_file}")
+    # Delete the three previously generated subgraphs
+    for image_file in image_files:
+        os.remove(image_file)
+        # print(f"The generated subimage has been deleted: {image_file}")
+    print(f"模型预测 完成")
+
+
+
+
+

@@ -1,179 +1,162 @@
 # MonoXtract
 
-MonoXtract is a one-dimensional convolution-Transformer model for classifying
-single-molecule fluorescence-intensity traces as valid or invalid. This
-repository contains a cleaned, English-language implementation of the model,
-data preprocessing, training, validation, prediction, and model-interpretation
-workflows used in the study.
+MonoXtract extracts and classifies single-molecule fluorescence-intensity
+traces with a hybrid convolution-Transformer network. This repository retains
+the complete research directories used for inference/testing and for
+training/validation; the source has not been collapsed into a smaller
+reimplementation.
 
 ## Repository layout
 
 ```text
 MonoXtract/
-|-- checkpoints/
-|   `-- best_acc.pth
-|-- data/
-|   `-- mlkl/
-|       |-- train/
-|       |   |-- traces/
-|       |   `-- splits/
-|       `-- validation/
-|           |-- traces/
-|           `-- labels.csv
-|-- docs/
-|   |-- DATASETS.md
-|   `-- REPRODUCIBILITY.md
-|-- monoxtract/
-|   |-- data.py
-|   |-- metrics.py
-|   `-- model.py
-|-- scripts/
-|   |-- attention_analysis.py
-|   |-- evaluate.py
-|   |-- predict.py
-|   |-- prepare_dataset.py
-|   |-- train.py
-|   `-- verify_install.py
-`-- requirements.txt
+|-- DeepSIFA_main_code/   Complete main algorithm, test workflow, MATLAB code,
+|                        example data, checkpoints, DLRunner, and analysis tools
+|-- DeepSIFA_automation/  Complete five-fold training and validation workflow,
+|                        MLKL datasets, checkpoints, logs, and auxiliary tools
+|-- docs/                 Installation and reproducibility notes
+|-- requirements.txt      Version-pinned Python dependencies
+`-- .gitattributes        Git LFS rules for binary research artifacts
 ```
 
-All public-facing comments, docstrings, file names, and instructions in this
-release are in English. The command-line programs use paths supplied by the
-user or paths resolved relative to the repository root; no developer-specific
-absolute paths are required.
+The source directory originally named `DeepSIFA自动化` is published as
+`DeepSIFA_automation` for an English-language repository. Its internal files
+and data are retained. Some legacy data folders and scripts keep their original
+Chinese names because other scripts refer to those names.
+
+## Clone the complete repository
+
+Large binary research artifacts are tracked with Git LFS. Install Git LFS
+before cloning:
+
+```bash
+git lfs install
+git clone https://github.com/gu195/MonoXtract.git
+cd MonoXtract
+git lfs pull
+```
+
+A normal GitHub source-code ZIP contains LFS pointer files rather than every
+large binary payload. Use `git clone` plus `git lfs pull`, or download the
+corresponding assets from the GitHub Release.
 
 ## Installation
 
-Python 3.8.20 was used for the pinned environment.
+The released Python environment is based on Python 3.8.20:
 
 ```bash
 conda create -n monoxtract python=3.8.20
 conda activate monoxtract
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-python -m scripts.verify_install
 ```
 
-PyTorch installation can depend on the local CUDA driver. The pinned
-`torch==2.4.1` entry is sufficient for CPU execution. Users who require a
-specific CUDA wheel may install the corresponding PyTorch 2.4.1 build first
-and then install the remaining packages with:
+The preprocessing workflow calls MATLAB through MATLAB Engine for Python.
+The development environment used MATLAB Engine R2021b. Install it from the
+MATLAB installation directory:
 
 ```bash
-python -m pip install -r requirements.txt --no-deps
+cd "<matlabroot>/extern/engines/python"
+python -m pip install .
 ```
 
-## Included MLKL data
+MATLAB is not required for loading already processed `.npz` traces or for
+running the neural-network evaluation scripts.
 
-The repository currently includes the processed MLKL traces that are available
-for model development:
+See [`docs/INSTALLATION.md`](docs/INSTALLATION.md) for CUDA and optional
+dependency notes.
 
-| Dataset role | Valid (`label=1`) | Invalid (`label=0`) | Total |
+## Included MLKL datasets
+
+The complete automation directory contains the currently available MLKL
+training and validation data:
+
+| Role | Valid (`good`) | Invalid (`bad`) | Total |
 |---|---:|---:|---:|
-| Training/development set | 218 | 117 | 335 |
-| Independent validation set | 190 | 147 | 337 |
+| Model training/development | 218 | 117 | 335 |
+| Independent validation/evaluation | 190 | 147 | 337 |
 
-The 335 development traces are accompanied by five reproducible stratified
-fold definitions. Each fold contains 268 training traces and 67 internal
-validation traces. The separate 337-trace MLKL set is used only for independent
-validation/evaluation.
+The training files and five-fold CSV definitions are under:
 
-The deposited files are normalized, linearly resampled to 1,024 points, and
-smoothed with a one-dimensional Gaussian filter (`sigma=1`). See
-[`docs/DATASETS.md`](docs/DATASETS.md) for the directory structure, labels, and
-data limitations.
-
-## Train the five folds
-
-From the repository root:
-
-```bash
-python -m scripts.train
+```text
+DeepSIFA_automation/data/mlkl/train/v1/
 ```
 
-The default command uses:
+The 337-trace validation dataset is under:
 
-- three Spatial Aware Cells (fixed by the model definition);
-- seven Transformer Cells;
-- batch size 32;
-- AdamW with learning rate `1e-4` and weight decay `0.05`;
-- 200 epochs and a five-epoch linear warm-up followed by cosine decay.
-
-SAC and TC counts were compared in a targeted architectural sensitivity
-analysis. Learning rate, batch size, and dropout were selected empirically and
-were not subjected to exhaustive automated optimization.
-
-To run one fold or change an output location:
-
-```bash
-python -m scripts.train --folds 1 --output-dir outputs/fold1
+```text
+DeepSIFA_automation/data/mlkl/test/v1/
 ```
 
-All data and output paths can be overridden through command-line options:
+These are MLKL datasets. Additional independent experimental datasets
+mentioned in the manuscript are not claimed to be included unless they are
+explicitly present in the repository.
+
+## Training
+
+The complete five-fold training workflow is:
 
 ```bash
-python -m scripts.train --help
+cd DeepSIFA_automation/DeepSIFA
+python train.py
 ```
 
-## Evaluate the released checkpoint
+The default data and split paths are resolved relative to
+`DeepSIFA_automation`; they no longer depend on a developer-specific drive.
+Use `python train.py --help` to override training parameters or paths.
+
+The reported architecture was selected by comparing the numbers of Spatial
+Aware Cells (SACs) and Transformer Cells (TCs). Learning rate, batch size, and
+dropout were selected empirically and were not subjected to an exhaustive
+automated search.
+
+## Training-set and validation-set evaluation
+
+From `DeepSIFA_automation/DeepSIFA`:
 
 ```bash
-python -m scripts.evaluate \
-  --checkpoint checkpoints/best_acc.pth \
-  --data-dir data/mlkl/validation/traces \
-  --labels data/mlkl/validation/labels.csv \
-  --output-dir outputs/validation
+python eval_train.py
+python eval_val.py
+python eval_test.py
 ```
 
-The evaluation command writes `metrics.json`, `predictions.csv`, a confusion
-matrix, an ROC curve, and a precision-recall curve.
+The scripts use repository-relative data, checkpoint, and result directories.
+All path arguments can still be overridden from the command line.
 
-## Predict unlabeled traces
+## Main trace-extraction and inference workflow
+
+The complete main workflow is retained under `DeepSIFA_main_code`.
 
 ```bash
-python -m scripts.predict \
-  --checkpoint checkpoints/best_acc.pth \
-  --data-dir path/to/processed_npz \
-  --output-csv outputs/predictions.csv
+cd DeepSIFA_main_code
+python sample.py --help
+cd DeepSIFA
+python eval_test.py --help
 ```
 
-Each `.npz` file must contain a one-dimensional array named `data` with 1,024
-values.
+`sample.py` performs the MATLAB-assisted trace-extraction and preprocessing
+pipeline. `DeepSIFA/eval_test.py` runs neural-network classification using the
+released checkpoint. `DLRunner.exe` provides the Windows graphical runner.
 
-## Prepare variable-length traces
+## Preprocessing of variable-length traces
 
-Raw text/CSV traces can be converted to the model input representation with:
+The preprocessing scripts apply min-max normalization, linearly resample each
+complete trace to 1,024 points, and apply one-dimensional Gaussian smoothing
+with `sigma=1`. They do not use zero padding, direct truncation, or sliding
+windows.
 
-```bash
-python -m scripts.prepare_dataset \
-  --good-dir path/to/valid_traces \
-  --bad-dir path/to/invalid_traces \
-  --output-dir data/custom/traces \
-  --manifest data/custom/labels.csv
-```
+## Source-language and legacy utilities
 
-The script applies min-max normalization, linear resampling to 1,024 points,
-and Gaussian smoothing with `sigma=1`. It does not use zero padding,
-truncation, or sliding windows.
+Python comments and docstrings in the deposited source have been translated to
+English. Runtime data labels and legacy file or directory names are preserved
+when changing them would break existing path references. Scripts under folders
+named `其他功能` are historical auxiliary analyses; several require the user to
+supply paths for their own external datasets. The supported main entry points
+listed above use repository-relative defaults.
 
-## Attention and feature-attribution analysis
+## Release assets
 
-The reproducible attention-rollout and Integrated Gradients analysis is
-available through:
+The GitHub Release provides the Windows runner and large checkpoint bundle for
+users who do not retrieve them through Git LFS. Release assets and repository
+files correspond to the same public source snapshot.
 
-```bash
-python -m scripts.attention_analysis --help
-```
-
-These visualizations explain which temporal regions contribute to the
-valid/invalid classification. They are not direct molecular-state or
-state-transition annotations.
-
-## Reproducibility scope
-
-This release contains the MLKL development and independent validation data
-listed above, the released checkpoint, and executable scripts for
-preprocessing, training, validation, prediction, and interpretation. Additional
-experimental evaluation datasets reported in the manuscript are not yet
-included in this repository and should not be inferred to be present. This
-scope is stated explicitly in [`docs/REPRODUCIBILITY.md`](docs/REPRODUCIBILITY.md).
