@@ -1,40 +1,35 @@
-﻿__pycache__/
-*.pyc
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 .venv/
+venv/
 env/
-.vscode/
 .idea/
-build/
-dist/
-# 大文件与数据
-data/
+.vscode/
+
+# Generated training and evaluation artifacts
+outputs/
+logs/
+runs/
+*.log
+
+# Large raw microscopy inputs are not stored in Git
 *.tif
 *.tiff
+*.nd2
+*.czi
+*.lif
+
+# Local model artifacts other than the released checkpoint
+checkpoints/*.pth
+!checkpoints/best_acc.pth
+checkpoints/fold*/
+
+# Temporary archives and executables
 *.zip
 *.rar
 *.7z
-*.pt
-*.h5
-*.weights
-*.ckpt
-*.log
-
-*.npz
-
-*.tif
-
-*.zip
-
-*.rar
-
-*.pt
-
-*.h5
-
-*.ckpt
-
-*.log
-
-data/
-
 *.exe

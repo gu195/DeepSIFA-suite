@@ -1,0 +1,3 @@
+dataset_role,molecular_system,valid,invalid,total
+training,MLKL,218,117,335
+validation,MLKL,190,147,337
