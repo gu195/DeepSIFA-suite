@@ -1,0 +1,8 @@
+{
+  "language": 0,
+  "curvePath": "sample.py",
+  "dataPath": "../DeepSIFA_automation/生成测试集数据和csv.py",
+  "mainPath": "DeepSIFA/eval_test.py",
+  "layered": "DeepSIFA/layering.py",
+  "interpreter": "python"
+}
