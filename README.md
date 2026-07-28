@@ -42,18 +42,18 @@ corresponding assets from the GitHub Release.
 
 ## Installation
 
-The released Python environment is based on Python 3.8.20:
+The released environment uses Python 3.9 and was validated with Python 3.9.25:
 
 ```bash
-conda create -n monoxtract python=3.8.20
+conda create -n monoxtract python=3.9
 conda activate monoxtract
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
 The preprocessing workflow calls MATLAB through MATLAB Engine for Python.
-The development environment used MATLAB Engine R2021b. Install it from the
-MATLAB installation directory:
+The validated environment uses MATLAB R2023b (MATLAB Engine 23.2). Install the
+engine from the MATLAB installation directory:
 
 ```bash
 cd "<matlabroot>/extern/engines/python"
@@ -63,8 +63,9 @@ python -m pip install .
 MATLAB is not required for loading already processed `.npz` traces or for
 running the neural-network evaluation scripts.
 
-See [`docs/INSTALLATION.md`](docs/INSTALLATION.md) for CUDA and optional
-dependency notes.
+For NVIDIA GPU execution, the validated configuration uses PyTorch 2.7.1 with
+CUDA 12.8. See [`docs/INSTALLATION.md`](docs/INSTALLATION.md) for the exact
+installation command and CPU alternatives.
 
 ## Included MLKL datasets
 

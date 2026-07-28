@@ -288,7 +288,7 @@ class VisionTransformer(nn.Module): # attention in_c=1
                  embed_dim=320, depth=12, num_heads=12, mlp_ratio=2, qkv_bias=True,
                  qk_scale=None, representation_size=None, distilled=False, drop_ratio=0.,
                  attn_drop_ratio=0., drop_path_ratio=0., embed_layer=PatchEmbed, norm_layer=None,
-                 act_layer=None):
+                 act_layer=None, tc_depth=7):
         """
         Args:
             img_size (int, tuple): input image size
@@ -324,6 +324,8 @@ class VisionTransformer(nn.Module): # attention in_c=1
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + self.num_tokens, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_ratio)
 
+        if not 1 <= tc_depth < depth:
+            raise ValueError(f"tc_depth must be between 1 and {depth - 1}, got {tc_depth}")
         dpr = [x.item() for x in torch.linspace(0, drop_path_ratio, depth)]  # stochastic depth decay rule
         self.blocks = nn.Sequential(*
         [BlockRC1()]+[BlockRC2()]+[BlockRC3()]
@@ -332,7 +334,7 @@ class VisionTransformer(nn.Module): # attention in_c=1
             Block(dim=embed_dim, num_heads=4, mlp_ratio=mlp_ratio, qkv_bias=qkv_bias, qk_scale=qk_scale,
                   drop_ratio=drop_ratio, attn_drop_ratio=attn_drop_ratio, drop_path_ratio=dpr[i],
                   norm_layer=norm_layer, act_layer=act_layer)
-            for i in range(1,11)
+            for i in range(1, tc_depth + 1)
         ])
         self.norm = norm_layer(embed_dim)
 
@@ -401,7 +403,7 @@ def _init_vit_weights(m):
         nn.init.zeros_(m.bias)
         nn.init.ones_(m.weight)
 
-def vit_base_patch16_224(num_classes: int = 1000):
+def vit_base_patch16_224(num_classes: int = 1000, tc_depth: int = 7):
     """
     ViT-Base model (ViT-B/16) from original paper (https://arxiv.org/abs/2010.11929).
     ImageNet-1k weights @ 224x224, source https://github.com/google-research/vision_transformer.
@@ -415,5 +417,6 @@ def vit_base_patch16_224(num_classes: int = 1000):
                               depth=12,
                               num_heads=12,
                               representation_size=None,
-                              num_classes=num_classes)
+                              num_classes=num_classes,
+                              tc_depth=tc_depth)
     return model

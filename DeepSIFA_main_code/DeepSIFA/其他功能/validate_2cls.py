@@ -6,7 +6,6 @@ from glob import glob
 from tqdm import tqdm
 import sys
 import gc
-import segmentation_models_pytorch as smp
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 import torch.nn as nn
 import torch.nn.functional as F
