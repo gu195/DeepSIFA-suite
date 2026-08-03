@@ -269,6 +269,8 @@ def calculate_metrics(
 ) -> Dict[str, object]:
     matrix = sk_metrics.confusion_matrix(labels, predictions, labels=[0, 1])
     tn, fp, fn, tp = (int(value) for value in matrix.ravel())
+    both_classes_present = set(labels) == {0, 1}
+    cohen_kappa = sk_metrics.cohen_kappa_score(labels, predictions)
     summary: Dict[str, object] = {
         "n": len(labels),
         "accuracy": sk_metrics.accuracy_score(labels, predictions),
@@ -276,9 +278,18 @@ def calculate_metrics(
         "recall": sk_metrics.recall_score(labels, predictions, zero_division=0),
         "specificity": tn / (tn + fp) if tn + fp else 0.0,
         "f1": sk_metrics.f1_score(labels, predictions, zero_division=0),
-        "cohen_kappa": sk_metrics.cohen_kappa_score(labels, predictions),
-        "roc_auc": sk_metrics.roc_auc_score(labels, probabilities),
-        "average_precision": sk_metrics.average_precision_score(labels, probabilities),
+        "cohen_kappa": float(cohen_kappa) if np.isfinite(cohen_kappa) else None,
+        "roc_auc": (
+            sk_metrics.roc_auc_score(labels, probabilities)
+            if both_classes_present
+            else None
+        ),
+        "average_precision": (
+            sk_metrics.average_precision_score(labels, probabilities)
+            if both_classes_present
+            else None
+        ),
+        "both_classes_present": both_classes_present,
         "confusion_matrix": matrix.tolist(),
         "tn": tn,
         "fp": fp,
@@ -392,17 +403,57 @@ def main() -> None:
     )
     model = load_model(checkpoint_path, args.tc_depth, device)
     rows, labels, predictions, probabilities = evaluate(model, loader, device)
-    summary = calculate_metrics(labels, predictions, probabilities)
 
     output_dir.mkdir(parents=True, exist_ok=True)
-    write_predictions(rows, output_dir / "score.csv")
+    predictions_path = output_dir / "score.csv"
+    write_predictions(rows, predictions_path)
+    plot_score_distributions(probabilities, output_dir / "score_distribution.png")
+
+    labeled_indices = [index for index, label in enumerate(labels) if label in (0, 1)]
+    if not labeled_indices:
+        summary: Dict[str, object] = {
+            "mode": "prediction_only",
+            "n": len(rows),
+            "labeled_n": 0,
+            "unlabeled_n": len(rows),
+            "prediction_counts": {
+                "0": predictions.count(0),
+                "1": predictions.count(1),
+            },
+            "evaluation_available": False,
+            "message": "No 0/1 ground-truth labels were supplied; evaluation metrics were skipped.",
+        }
+        with (output_dir / "metrics.json").open("w", encoding="utf-8") as handle:
+            json.dump(summary, handle, indent=2)
+        print(json.dumps(summary, indent=2))
+        print("Prediction-only mode: labels are -1, so evaluation metrics were skipped.")
+        print("Prediction labels: pre=0 means Invalid/Bad; pre=1 means Valid/Good.")
+        print(f"Classification results saved to: {predictions_path}")
+        return
+
+    labeled_labels = [labels[index] for index in labeled_indices]
+    labeled_predictions = [predictions[index] for index in labeled_indices]
+    labeled_probabilities = [probabilities[index] for index in labeled_indices]
+    summary = calculate_metrics(
+        labeled_labels, labeled_predictions, labeled_probabilities
+    )
+    summary.update(
+        {
+            "mode": "evaluation" if len(labeled_indices) == len(rows) else "mixed",
+            "total_n": len(rows),
+            "labeled_n": len(labeled_indices),
+            "unlabeled_n": len(rows) - len(labeled_indices),
+            "evaluation_available": True,
+        }
+    )
     with (output_dir / "metrics.json").open("w", encoding="utf-8") as handle:
         json.dump(summary, handle, indent=2)
     plot_confusion_matrix(summary, output_dir / "confusion_matrix.png")
-    plot_roc_pr(labels, probabilities, output_dir)
-    plot_score_distributions(probabilities, output_dir / "score_distribution.png")
+    if summary["both_classes_present"]:
+        plot_roc_pr(labeled_labels, labeled_probabilities, output_dir)
 
     print(json.dumps(summary, indent=2))
+    print(f"Classification results saved to: {predictions_path}")
     print(f"Evaluation results saved to: {output_dir}")
 
 
